@@ -1,0 +1,108 @@
+name: Build wheels and publish to PyPI
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  check_tag:
+    name: Check tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - shell: bash
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          GH_TAG_NAME="${TAG#v}"
+          PY_VERSION=$(python - <<'PY'
+          import pathlib, tomllib
+          data = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))
+          print(data.get("project").get("version"))
+          PY
+          )
+          if [ "${GH_TAG_NAME}" != "${PY_VERSION}" ]; then
+            echo "::error::Tag (${GH_TAG_NAME}) does not match pyproject.toml version (${PY_VERSION})."
+            exit 2
+          fi
+
+  build_wheels:
+    name: Build wheels on ${{ matrix.os }}
+    needs: check_tag
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.22
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
+          path: ./wheelhouse/*.whl
+
+  build_sdist:
+    name: Build source distribution
+    needs: check_tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build dependencies
+        run: uv pip install "cython>=3.0" "numpy>=1.21" setuptools build
+        env:
+          UV_SYSTEM_PYTHON: 1
+
+      - name: Build sdist
+        run: python -m build --sdist --outdir dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cibw-sdist
+          path: dist/*.tar.gz
+
+  upload_wheels:
+    name: Upload wheels to PyPI
+    runs-on: ubuntu-latest
+    needs: [build_wheels, build_sdist]
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: cibw-*
+          path: dist
+          merge-multiple: true
+
+      - name: Publish package to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/

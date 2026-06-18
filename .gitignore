@@ -181,6 +181,11 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
+# Cython-generated C files (build artifacts, not to be committed)
+sktime_cython/**/*.c
+sktime_cython/**/*.so
+sktime_cython/**/*.pyd
+
 # PyCharm
 #   JetBrains specific template is maintained in a separate JetBrains.gitignore that can
 #   be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore

@@ -1,0 +1,115 @@
+[project]
+name = "sktime-cython"
+version = "0.1.0"
+description = "Cython extensions for sktime"
+readme = "README.md"
+keywords = [
+  "cython",
+  "machine-learning",
+  "scikit-learn",
+  "time-series",
+  "time-series-analysis",
+]
+license = { file = "LICENSE" }
+maintainers = [
+  { name = "sktime developers", email = "sktime.toolbox@gmail.com" },
+]
+authors = [
+  { name = "sktime developers", email = "sktime.toolbox@gmail.com" },
+]
+requires-python = ">=3.10,<3.14"
+classifiers = [
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: BSD License",
+  "Operating System :: MacOS",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX",
+  "Operating System :: Unix",
+  "Programming Language :: Cython",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Software Development",
+]
+dependencies = [
+  "numpy>=1.21,<2.5",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pre-commit",
+  "pytest",
+  "pytest-timeout",
+  "pytest-xdist",
+]
+tests = [
+  "pytest>=7.4,<9.2",
+  "pytest-timeout>=2.1,<2.5",
+  "pytest-xdist>=3.3,<3.9",
+]
+
+[project.urls]
+Homepage = "https://github.com/sktime/sktime-cython"
+Repository = "https://github.com/sktime/sktime-cython"
+
+[build-system]
+requires = [
+  "Cython>=3.0",
+  "numpy>=1.21",
+  "setuptools>=68",
+]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+exclude = ["tests", "tests.*"]
+
+[tool.cibuildwheel]
+# Run tests after each wheel build to verify the Cython extensions work
+test-requires = ["pytest"]
+test-command = "python -m pytest {project}/sktime_cython -v"
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+  "D",
+  "E",
+  "W",
+  "F",
+  "S",
+  "UP",
+  "I",
+  "C4",
+]
+ignore = [
+  "E203",
+  "E402",
+  "E731",
+  "S101",
+  "RUF100",
+  "E741",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = [
+  "F401",
+]
+"**/tests/**" = [
+  "D",
+  "S605",
+  "S607",
+  "PT004",
+  "PT011",
+  "PT012",
+]
