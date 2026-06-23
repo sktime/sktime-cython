@@ -48,11 +48,10 @@ dev = [
   "pytest",
   "pytest-timeout",
   "pytest-xdist",
-]
-tests = [
-  "pytest>=7.4,<9.2",
-  "pytest-timeout>=2.1,<2.5",
-  "pytest-xdist>=3.3,<3.9",
+  # sktime + numba power the equivalence test (Cython vs numba MiniRocket).
+  # Dev-only: runtime deps stay numpy-only.
+  "sktime",
+  "numba",
 ]
 
 [project.urls]
