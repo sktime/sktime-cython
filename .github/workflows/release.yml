@@ -1,8 +1,18 @@
 name: Build wheels and publish to PyPI
 
 on:
-  release:
-    types: [published]
+  # Publish on pushing a version tag, e.g. `git tag v0.1.0 && git push --tags`.
+  # The tag must match the version in pyproject.toml (checked below). Use a
+  # PEP 440 pre-release version (e.g. 0.1.0rc1 -> tag v0.1.0rc1) to publish a
+  # pre-release that `pip install` ignores unless `--pre` is passed.
+  push:
+    tags:
+      - "v*"
+
+# Never run two publishes for the same tag concurrently.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   check_tag:
@@ -20,18 +30,29 @@ jobs:
 
       - shell: bash
         run: |
-          TAG="${{ github.event.release.tag_name }}"
-          GH_TAG_NAME="${TAG#v}"
-          PY_VERSION=$(python - <<'PY'
-          import pathlib, tomllib
-          data = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))
-          print(data.get("project").get("version"))
+          python -m pip install -q packaging
+          # Validate the tag is a real PEP 440 version (packaging is PyPI's own
+          # parser) and matches pyproject.toml. Version() compares normalized,
+          # so v1.0 == 1.0.0 and 1.0.0rc1 is accepted as a pre-release.
+          GH_TAG_NAME="${GITHUB_REF_NAME#v}"
+          python - "$GH_TAG_NAME" <<'PY'
+          import pathlib, sys, tomllib
+          from packaging.version import InvalidVersion, Version
+
+          tag = sys.argv[1]
+          pyproj = tomllib.loads(
+              pathlib.Path("pyproject.toml").read_text(encoding="utf-8")
+          )["project"]["version"]
+          try:
+              tag_v = Version(tag)
+          except InvalidVersion:
+              sys.exit(f"::error::Tag '{tag}' is not a valid PEP 440 version.")
+          if tag_v != Version(pyproj):
+              sys.exit(
+                  f"::error::Tag ({tag}) does not match "
+                  f"pyproject.toml version ({pyproj})."
+              )
           PY
-          )
-          if [ "${GH_TAG_NAME}" != "${PY_VERSION}" ]; then
-            echo "::error::Tag (${GH_TAG_NAME}) does not match pyproject.toml version (${PY_VERSION})."
-            exit 2
-          fi
 
   build_wheels:
     name: Build wheels on ${{ matrix.os }}
