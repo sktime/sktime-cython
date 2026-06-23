@@ -17,7 +17,7 @@ maintainers = [
 authors = [
   { name = "sktime developers", email = "sktime.toolbox@gmail.com" },
 ]
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.10,<3.15"
 classifiers = [
   "Intended Audience :: Developers",
   "Intended Audience :: Science/Research",
@@ -33,6 +33,7 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Topic :: Scientific/Engineering",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
   "Topic :: Software Development",
@@ -62,7 +63,7 @@ Repository = "https://github.com/sktime/sktime-cython"
 requires = [
   "Cython>=3.0",
   "numpy>=1.21",
-  "setuptools>=68",
+  "setuptools>=70.1",
 ]
 build-backend = "setuptools.build_meta"
 
@@ -70,9 +71,14 @@ build-backend = "setuptools.build_meta"
 exclude = ["tests", "tests.*"]
 
 [tool.cibuildwheel]
-# Run tests after each wheel build to verify the Cython extensions work
+# CPython only; PyPy has no upstream numpy wheels for this matrix, so skip it.
+# requires-python in [project] already bounds the CPython versions built.
+skip = ["pp*"]
+# Run tests after each wheel build to verify the Cython extensions actually
+# work. --pyargs imports the installed wheel by name instead of collecting from
+# the source tree, so this exercises the built artifact.
 test-requires = ["pytest"]
-test-command = "python -m pytest {project}/sktime_cython -v"
+test-command = "python -m pytest --pyargs sktime_cython -v"
 
 [tool.ruff]
 line-length = 88
