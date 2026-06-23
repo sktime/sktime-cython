@@ -1,0 +1,7 @@
+# Cython sources must ship in the sdist so it can build on the user's machine.
+recursive-include sktime_cython *.pyx *.pxd *.pyi
+include LICENSE README.md pyproject.toml setup.py
+
+# Never ship build artifacts: the .c is regenerated from .pyx at build time.
+recursive-exclude sktime_cython *.c *.so *.pyd
+global-exclude __pycache__ *.py[cod]

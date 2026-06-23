@@ -19,8 +19,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: repository checkout step
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -29,8 +28,7 @@ jobs:
         with:
           enable-cache: true
 
-      - name: python environment step
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
@@ -39,73 +37,69 @@ jobs:
         env:
           UV_SYSTEM_PYTHON: 1
 
-      - name: Get changed files
-        id: changed-files
-        run: |
-          CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | tr '\n' ' ')
-          echo "CHANGED_FILES=${CHANGED_FILES}" >> $GITHUB_ENV
+      - name: run pre-commit
+        run: pre-commit run --all-files --color always --show-diff-on-failure
 
-      - name: Print changed files
-        run: |
-          echo "Changed files:" && echo "$CHANGED_FILES" | tr ' ' '\n'
-
-      - name: Run pre-commit on changed files
-        run: |
-          if [ -n "$CHANGED_FILES" ]; then
-            pre-commit run --color always --files $CHANGED_FILES --show-diff-on-failure
-          else
-            echo "No changed files to check."
-          fi
-
-  test-nosoftdeps:
-    name: test-nosoftdeps
-    needs: code-quality
+  # Single source of truth for supported Python versions: the
+  # "Programming Language :: Python :: 3.x" classifiers in pyproject.toml.
+  # Bump the classifiers + requires-python and the test matrix follows.
+  #
+  # The full Python range runs on Linux (cheap, plentiful runners); macOS and
+  # Windows only run the oldest + newest Python (the edges that catch
+  # platform-specific compile breaks). This keeps the scarce macOS runners to
+  # 2 jobs instead of one per Python version, which otherwise queue for ages.
+  # macOS is pinned to macos-15 (not macos-latest): during GitHub's macOS-26
+  # migration, macos-latest jobs are starved by concurrency limits.
+  generate-matrix:
+    name: generate test matrix
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      include: ${{ steps.set.outputs.include }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Display Python version
-        run: python -c "import sys; print(sys.version)"
+      - id: set
+        shell: bash
+        run: |
+          INCLUDE=$(python - <<'PY'
+          import json, pathlib, re, tomllib
 
-      - name: Install Cython and build dependencies
-        run: uv pip install "cython>=3.0" "numpy>=1.21" setuptools
-        env:
-          UV_SYSTEM_PYTHON: 1
+          classifiers = tomllib.loads(
+              pathlib.Path("pyproject.toml").read_text(encoding="utf-8")
+          )["project"]["classifiers"]
+          pat = re.compile(r"^Programming Language :: Python :: (3\.\d+)$")
+          versions = sorted(
+              {m.group(1) for c in classifiers if (m := pat.match(c))},
+              key=lambda v: int(v.split(".")[1]),
+          )
+          assert versions, "no 'Programming Language :: Python :: 3.x' classifiers found"
+          edges = sorted({versions[0], versions[-1]}, key=lambda v: int(v.split(".")[1]))
+          include = (
+              [{"os": "ubuntu-latest", "python-version": v} for v in versions]
+              + [{"os": "macos-15", "python-version": v} for v in edges]
+              + [{"os": "windows-latest", "python-version": v} for v in edges]
+          )
+          print(json.dumps(include))
+          PY
+          )
+          echo "Matrix: $INCLUDE"
+          echo "include=$INCLUDE" >> "$GITHUB_OUTPUT"
 
-      - name: Install package with dev dependencies
-        run: uv pip install -e ".[dev]" --no-build-isolation
-        env:
-          UV_SYSTEM_PYTHON: 1
-
-      - name: Show dependencies
-        run: uv pip list
-        env:
-          UV_SYSTEM_PYTHON: 1
-
-      - name: Run tests
-        run: python -m pytest sktime_cython/ -v
-
-  test-full:
+  test:
     name: test (${{ matrix.python-version }}, ${{ matrix.os }})
-    needs: test-nosoftdeps
+    needs: [code-quality, generate-matrix]
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include: ${{ fromJson(needs.generate-matrix.outputs.include) }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     permissions:
       contents: read
 
@@ -125,13 +119,12 @@ jobs:
       - name: Display Python version
         run: python -c "import sys; print(sys.version)"
 
-      - name: Install Cython and build dependencies
-        run: uv pip install "cython>=3.0" "numpy>=1.21" setuptools
-        env:
-          UV_SYSTEM_PYTHON: 1
-
-      - name: Install package with dev dependencies
-        run: uv pip install -e ".[dev]" --no-build-isolation
+      # Build isolation lets the frontend read [build-system].requires
+      # (Cython, numpy, setuptools), so the .pyx compiles identically on every
+      # OS. Do NOT add --no-build-isolation: it drops the build env and breaks
+      # the Windows wheel build (missing bdist_wheel).
+      - name: Install package with test dependencies
+        run: uv pip install -e ".[dev]"
         env:
           UV_SYSTEM_PYTHON: 1
 
@@ -140,5 +133,7 @@ jobs:
         env:
           UV_SYSTEM_PYTHON: 1
 
+      # --pyargs imports the installed package by name rather than collecting
+      # from the source tree, so tests run against what actually got built.
       - name: Run tests
-        run: python -m pytest sktime_cython/ -v
+        run: python -m pytest --pyargs sktime_cython -v
