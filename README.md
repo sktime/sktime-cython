@@ -1,68 +1,107 @@
 # sktime-cython
 
-Cython extensions for [sktime](https://github.com/sktime/sktime).
+Cython-compiled estimators for [sktime](https://github.com/sktime/sktime).
 
-This repository is an empty Python package template with GitHub Actions CI/CD configured for Cython-based packages.
+This package hosts ahead-of-time compiled implementations of sktime algorithms,
+isolating the C-compilation and binary-wheel complexity from the main `sktime`
+package. Estimators here expose a plain numpy-in/numpy-out compute layer with
+**no sktime runtime dependency**; `sktime` keeps thin `BaseTransformer` /
+`BaseEstimator` wrappers that delegate to this package.
 
-## Overview
+Why a separate package: compiled extensions need a C toolchain, per-platform
+wheels, and `cibuildwheel` release machinery. Keeping that here lets `sktime`
+stay pure-Python while still offering compiled, numba-free fast paths.
 
-- **Python package**: `sktime_cython`
-- **Build system**: setuptools + Cython
-- **CI**: GitHub Actions (test + release)
+## Estimators
 
-## Development Setup
+| Estimator | Compute API | Notes |
+|-----------|-------------|-------|
+| Multivariate MiniRocket | `sktime_cython.fit` / `transform` | numba-free; equivalent to `MiniRocketMultivariate`, no JIT warmup |
 
-```bash
-# Install build dependencies and package in editable mode
-pip install "cython>=3.0" "numpy>=1.21" setuptools
-pip install -e ".[dev]" --no-build-isolation
+More estimators are added as `.pyx` kernels under `sktime_cython/_cython/` with
+a numpy compute layer alongside.
 
-# Run tests
-python -m pytest sktime_cython/ -v
+Each estimator lives in its own submodule (nothing is re-exported at the top
+level, so estimators never collide on common names like `fit`/`transform`):
+
+```python
+import numpy as np
+from sktime_cython.minirocket import fit, transform
+
+X = np.random.rand(100, 6, 500).astype("float32")
+params = fit(X, num_kernels=10_000, random_state=42)
+features = transform(X, params, n_jobs=-1)   # GIL-released kernel, real threads
 ```
 
-Or using `make`:
+Runtime dependency: numpy only.
+
+## Development
+
+Requires a C compiler and Python 3.10+. Run from the project root.
 
 ```bash
-make install  # install with build dependencies
-make test     # run tests
-make clean    # clean build artifacts
+# editable install with the dev extra (pulls sktime + numba for equivalence
+# tests, plus pre-commit); compiles the Cython extensions via build isolation
+uv pip install -e ".[dev]"        # or: pip install -e ".[dev]"
+
+# install the git pre-commit hooks ONCE — this is what stops CI lint failures
+pre-commit install
+
+# run the tests
+python -m pytest sktime_cython -v
 ```
 
-## CI Workflows
+After editing a `.pyx`, recompile with `pip install -e .` again (or `make build`).
 
-### `test.yml`
+`make` shortcuts (auto-detect `uv`, falling back to `pip`/`python`):
+`make install`, `make build`, `make test`, `make clean`.
 
-Runs on every push and pull request to `main`. Jobs:
+## Before you push (avoid CI failures)
 
-- **`code-quality`**: runs pre-commit hooks (ruff formatting and linting)
-- **`test-nosoftdeps`**: builds Cython extensions and runs tests on Python 3.11 / Ubuntu
-- **`test-full`**: builds Cython extensions and runs tests across Python 3.10–3.13 on Ubuntu, macOS, and Windows
+CI runs the pre-commit hooks and **fails if they reformat anything**. Running
+`pre-commit install` (above) auto-runs them on every `git commit`. To check the
+whole tree on demand:
 
-The `test.yml` workflow installs Cython and NumPy before building the package, so `.pyx` files are compiled and available for testing.
+```bash
+pre-commit run --all-files
+```
 
-### `release.yml`
+This runs `ruff check` (lint) and `ruff format`. If `ruff format` reports "files
+were modified", it already fixed them — `git add` the changes and commit again.
 
-Triggered on GitHub release. Jobs:
+## CI workflows
 
-- **`check_tag`**: verifies the release tag matches the version in `pyproject.toml`
-- **`build_wheels`**: uses [`cibuildwheel`](https://cibuildwheel.pypa.io/) to build binary wheels for Linux, macOS (Intel + Apple Silicon), and Windows
-- **`build_sdist`**: builds a source distribution (`.tar.gz`) that includes the `.pyx` source files
-- **`upload_wheels`**: publishes all wheels and the sdist to PyPI using trusted publishing
+- **`test.yml`** (push / PR to `main`): a `code-quality` job running the
+  pre-commit hooks, plus a matrix that builds the Cython extensions and runs
+  pytest across Python 3.10–3.14 on Linux, macOS, and Windows.
+- **`release.yml`** (on GitHub release): builds binary wheels with
+  [`cibuildwheel`](https://cibuildwheel.pypa.io/) for all platforms, builds an
+  sdist (with `.pyx` sources), and publishes to PyPI via trusted publishing.
 
-## Package Structure
+## Adding an estimator
+
+1. Drop the kernel `.pyx` (and optional `.pyi` stub) under `sktime_cython/_cython/`.
+2. Register it as an `Extension` in `setup.py`.
+3. Add a numpy compute-layer module `sktime_cython/<name>.py` exposing the
+   estimator's public functions. Keep them in the submodule — do not re-export
+   at the top level (avoids name collisions across estimators).
+4. Add an equivalence test under `sktime_cython/_cython/tests/`.
+
+## Package structure
 
 ```
 sktime_cython/
-  __init__.py                         # package root
+  __init__.py                                    # public compute-layer exports
+  minirocket.py                                  # numpy fit/transform layer
   _cython/
     __init__.py
-    example.pyx                       # example Cython extension
+    _minirocket_multivariate_cython.pyx          # compiled kernels
+    _minirocket_multivariate_cython.pyi          # type stubs
     tests/
       __init__.py
-      test_example.py                 # tests for the example extension
+      test_minirocket.py
 ```
 
 ## License
 
-BSD 3-Clause License - see [LICENSE](LICENSE).
+BSD 3-Clause License — see [LICENSE](LICENSE).
