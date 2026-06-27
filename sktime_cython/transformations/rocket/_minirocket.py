@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
-from sktime_cython._cython import _minirocket_multivariate_cython as _cy
+from sktime_cython.transformations.rocket import _minirocket_multivariate_cython as _cy
 
 __all__ = ["fit", "transform"]
 
