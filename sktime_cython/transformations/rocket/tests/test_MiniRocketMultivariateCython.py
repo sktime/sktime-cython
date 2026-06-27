@@ -13,7 +13,7 @@ import pytest
 
 from sktime_cython.transformations.rocket._minirocket import (
     rocket_fit,
-    rocket_transform
+    rocket_transform,
 )
 
 # sktime is only present with the `dev` extra; the cibuildwheel wheel-test env
