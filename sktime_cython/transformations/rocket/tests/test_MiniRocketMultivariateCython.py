@@ -11,7 +11,7 @@ import importlib.util
 import numpy as np
 import pytest
 
-from sktime_cython.minirocket import fit, transform
+from sktime_cython.transformations.rocket._minirocket import fit, transform
 
 # sktime is only present with the `dev` extra; the cibuildwheel wheel-test env
 # installs pytest only. find_spec detects absence without importing.

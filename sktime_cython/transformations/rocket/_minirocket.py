@@ -1,3 +1,4 @@
+@ -1,201 +0,0 @@
 """Numba-free MiniRocket multivariate transform (pure-numpy + Cython core).
 
 Compute layer with no sktime dependency: numpy arrays in, numpy arrays out.
