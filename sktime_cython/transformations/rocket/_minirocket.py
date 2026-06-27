@@ -12,7 +12,7 @@ import numpy as np
 
 from sktime_cython.transformations.rocket import _minirocket_multivariate_cython as _cy
 
-__all__ = ["fit", "transform"]
+__all__ = ["rocket_fit", "rocket_transform"]
 
 _NUM_KERNELS = 84
 
@@ -57,7 +57,7 @@ def _quantiles(n):
     )
 
 
-def fit(X, num_kernels=10_000, max_dilations_per_kernel=32, random_state=None):
+def rocket_fit(X, num_kernels=10_000, max_dilations_per_kernel=32, random_state=None):
     """Fit dilations, channel selections, and biases.
 
     Parameters
@@ -161,7 +161,7 @@ def fit(X, num_kernels=10_000, max_dilations_per_kernel=32, random_state=None):
     )
 
 
-def transform(X, parameters, n_jobs=1):
+def rocket_transform(X, parameters, n_jobs=1):
     """Apply a fitted MiniRocket transform.
 
     Parameters
