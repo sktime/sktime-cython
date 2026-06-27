@@ -80,26 +80,33 @@ were modified", it already fixed them — `git add` the changes and commit again
 
 ## Adding an estimator
 
-1. Drop the kernel `.pyx` (and optional `.pyi` stub) under `sktime_cython/_cython/`.
-2. Register it as an `Extension` in `setup.py`.
+1. Drop the kernel `.pyx` (and optional `.pyi` stub) in a subfolder of the package.
+  The package structure mirrors that of `sktime`, files should be added paralleling
+  its primary import location in `sktime`
+2. Register the kernel as an `Extension` in `setup.py`.
 3. Add a numpy compute-layer module `sktime_cython/<name>.py` exposing the
    estimator's public functions. Keep them in the submodule — do not re-export
    at the top level (avoids name collisions across estimators).
-4. Add an equivalence test under `sktime_cython/_cython/tests/`.
+4. Add tests in a subfolder `tests`, in the same folder as the kernel.
 
 ## Package structure
 
+Cython kernels and python layers should be added in a parallel location as in the
+`sktime` package.
+
+Example for minirocket:
+
 ```
 sktime_cython/
-  __init__.py                                    # public compute-layer exports
-  minirocket.py                                  # numpy fit/transform layer
-  _cython/
-    __init__.py
-    _minirocket_multivariate_cython.pyx          # compiled kernels
-    _minirocket_multivariate_cython.pyi          # type stubs
-    tests/
-      __init__.py
-      test_minirocket.py
+  transformations/
+    rocket/
+      __init__.py                           # public compute-layer exports
+      _minirocket.py                        # numpy fit/transform layer
+      _minirocket_multivariate_cython.pyx   # compiled kernels
+      _minirocket_multivariate_cython.pyi   # type stubs
+      tests/
+        __init__.py
+        test_minirocket.py                  # tests
 ```
 
 ## License

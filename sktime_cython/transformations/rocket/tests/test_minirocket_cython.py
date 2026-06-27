@@ -11,7 +11,10 @@ import importlib.util
 import numpy as np
 import pytest
 
-from sktime_cython.minirocket import fit, transform
+from sktime_cython.transformations.rocket._minirocket import (
+    rocket_fit,
+    rocket_transform,
+)
 
 # sktime is only present with the `dev` extra; the cibuildwheel wheel-test env
 # installs pytest only. find_spec detects absence without importing.
@@ -43,13 +46,13 @@ def test_cython_matches_numba(
         random_state=random_state,
     ).fit_transform(X)
 
-    params = fit(
+    params = rocket_fit(
         X,
         num_kernels=num_kernels,
         max_dilations_per_kernel=max_dilations_per_kernel,
         random_state=random_state,
     )
-    cython_out = transform(X, params)
+    cython_out = rocket_transform(X, params)
 
     assert cython_out.shape == numba_out.shape
     np.testing.assert_allclose(cython_out, numba_out.to_numpy(), rtol=1e-4, atol=1e-5)
@@ -59,7 +62,7 @@ def test_cython_matches_numba(
 def test_output_shape(num_kernels):
     """transform yields (n_instances, num_kernels) float32 features."""
     X = _panel(0)
-    out = transform(X, fit(X, num_kernels=num_kernels, random_state=0))
+    out = rocket_transform(X, rocket_fit(X, num_kernels=num_kernels, random_state=0))
     assert out.shape == (X.shape[0], num_kernels)
     assert out.dtype == np.float32
 
@@ -67,9 +70,9 @@ def test_output_shape(num_kernels):
 def test_threaded_matches_serial():
     """n_jobs>1 must match the single-threaded result."""
     X = _panel(3)
-    params = fit(X, num_kernels=168, random_state=1)
+    params = rocket_fit(X, num_kernels=168, random_state=1)
     np.testing.assert_array_equal(
-        transform(X, params, n_jobs=1), transform(X, params, n_jobs=4)
+        rocket_transform(X, params, n_jobs=1), rocket_transform(X, params, n_jobs=4)
     )
 
 
@@ -77,4 +80,4 @@ def test_too_short_series_raises():
     """n_timepoints < 9 is rejected."""
     X = _panel(0, n_timepoints=8)
     with pytest.raises(ValueError, match="n_timepoints must be >= 9"):
-        fit(X)
+        rocket_fit(X)
