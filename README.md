@@ -18,20 +18,8 @@ stay pure-Python while still offering compiled, numba-free fast paths.
 |-----------|-------------|-------|
 | Multivariate MiniRocket | `sktime_cython.fit` / `transform` | numba-free; equivalent to `MiniRocketMultivariate`, no JIT warmup |
 
-More estimators are added as `.pyx` kernels under `sktime_cython/_cython/` with
-a numpy compute layer alongside.
-
-Each estimator lives in its own submodule (nothing is re-exported at the top
-level, so estimators never collide on common names like `fit`/`transform`):
-
-```python
-import numpy as np
-from sktime_cython.minirocket import fit, transform
-
-X = np.random.rand(100, 6, 500).astype("float32")
-params = fit(X, num_kernels=10_000, random_state=42)
-features = transform(X, params, n_jobs=-1)   # GIL-released kernel, real threads
-```
+Logic for further `sktime` cython based estimators should be added in this package,
+for a recipe, see the [extension guide](https://github.com/sktime/sktime-cython#adding-an-estimator) below.
 
 Runtime dependency: numpy only.
 
