@@ -3,10 +3,13 @@
 The shape / threading / guard tests are self-contained (no sktime) so they run
 in cibuildwheel's isolated wheel-test env, which installs only pytest. The
 equivalence-vs-numba test imports sktime lazily and is skipped where sktime is
-absent (install the ``dev`` extra to run it).
+absent (install the ``dev`` extra to run it). Set
+``SKTIME_CYTHON_REQUIRE_SKTIME=1`` to turn that skip into a failure, so a CI
+job that installs the dev extra cannot silently stop comparing.
 """
 
 import importlib.util
+import os
 
 import numpy as np
 import pytest
@@ -19,6 +22,14 @@ from sktime_cython.transformations.rocket._minirocket import (
 # sktime is only present with the `dev` extra; the cibuildwheel wheel-test env
 # installs pytest only. find_spec detects absence without importing.
 _HAS_SKTIME = importlib.util.find_spec("sktime") is not None
+_REQUIRE_SKTIME = os.environ.get("SKTIME_CYTHON_REQUIRE_SKTIME") == "1"
+
+# When sktime is required, do not skip: the lazy import inside the test body
+# then fails loudly instead of the comparison quietly disappearing.
+needs_sktime = pytest.mark.skipif(
+    not _HAS_SKTIME and not _REQUIRE_SKTIME,
+    reason="sktime not installed (dev extra)",
+)
 
 
 def _panel(seed, n_columns=3, n_timepoints=60):
@@ -26,7 +37,7 @@ def _panel(seed, n_columns=3, n_timepoints=60):
     return rng.normal(size=(6, n_columns, n_timepoints)).astype(np.float32)
 
 
-@pytest.mark.skipif(not _HAS_SKTIME, reason="sktime not installed (dev extra)")
+@needs_sktime
 @pytest.mark.parametrize("n_columns", [1, 4])
 @pytest.mark.parametrize(
     "num_kernels,max_dilations_per_kernel,random_state",

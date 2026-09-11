@@ -135,5 +135,13 @@ jobs:
 
       # --pyargs imports the installed package by name rather than collecting
       # from the source tree, so tests run against what actually got built.
+      #
+      # Every job here installs the dev extra, so the equivalence-vs-numba
+      # comparisons should run rather than skip. SKTIME_CYTHON_REQUIRE_SKTIME
+      # turns those skips into failures on one job, so a broken sktime install
+      # cannot silently drop the groundtruth comparisons. Wheel tests
+      # (cibuildwheel, pytest only) leave it unset and keep skipping.
       - name: Run tests
         run: python -m pytest --pyargs sktime_cython -v
+        env:
+          SKTIME_CYTHON_REQUIRE_SKTIME: ${{ (matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11') && '1' || '' }}
