@@ -3,14 +3,16 @@
 
 Ahead-of-time compiled ports of sktime's ``_minirocket_multi_numba`` kernels
 (``_fit_biases_multi`` and ``_transform_multi``). Same math, no numba JIT
-warmup. Both consume float32/int32 arrays produced by the pure-numpy fit
-scaffolding in ``MiniRocketMultivariateCython`` and are numerically equivalent
-to the numba implementation (verified against it as groundtruth in tests).
+warmup. Both accept float32 or float64 ``X`` without copying it, and compute
+in float32 like the numba implementation, which casts its input to float32.
+They are numerically equivalent to it (verified against it as groundtruth in
+tests).
 """
 
 import numpy as np
 
 cimport numpy as cnp
+from cython cimport floating
 from libc.stdlib cimport free, malloc
 
 cnp.import_array()
@@ -31,7 +33,7 @@ cdef int _NUM_KERNELS = _fill_idx()
 
 
 def transform(
-    cnp.ndarray[cnp.float32_t, ndim=3, mode="c"] X,
+    floating[:, :, ::1] X,
     int[::1] num_channels_per_combination,
     int[::1] channel_indices,
     int[::1] dilations,
@@ -42,7 +44,6 @@ def transform(
     cdef int n_instances = X.shape[0]
     cdef int n_columns = X.shape[1]
     cdef int n_timepoints = X.shape[2]
-    cdef float[:, :, ::1] Xv = X
 
     cdef int num_kernels = _NUM_KERNELS
     cdef int num_dilations = dilations.shape[0]
@@ -90,7 +91,7 @@ def transform(
                 for c in range(n_columns):
                     base = c * n_timepoints
                     for t in range(n_timepoints):
-                        x = Xv[ex, c, t]
+                        x = <float>X[ex, c, t]
                         C_alpha[base + t] = -x
                         C_gamma[4 * csize + base + t] = x + x + x
                 for g in range(9):
@@ -108,9 +109,9 @@ def transform(
                         for c in range(n_columns):
                             base = c * n_timepoints
                             for t in range(end):
-                                C_alpha[base + n_timepoints - end + t] += -Xv[ex, c, t]
+                                C_alpha[base + n_timepoints - end + t] += -<float>X[ex, c, t]
                                 C_gamma[g * csize + base + n_timepoints - end + t] = (
-                                    3.0 * Xv[ex, c, t]
+                                    3.0 * <float>X[ex, c, t]
                                 )
                     end += dilation
 
@@ -121,9 +122,9 @@ def transform(
                         for c in range(n_columns):
                             base = c * n_timepoints
                             for t in range(n_timepoints - start):
-                                C_alpha[base + t] += -Xv[ex, c, start + t]
+                                C_alpha[base + t] += -<float>X[ex, c, start + t]
                                 C_gamma[g * csize + base + t] = (
-                                    3.0 * Xv[ex, c, start + t]
+                                    3.0 * <float>X[ex, c, start + t]
                                 )
                     start += dilation
 
@@ -179,7 +180,7 @@ def transform(
 
 
 def fit_biases(
-    cnp.ndarray[cnp.float32_t, ndim=3, mode="c"] X,
+    floating[:, :, ::1] X,
     int[::1] num_channels_per_combination,
     int[::1] channel_indices,
     int[::1] dilations,
@@ -195,7 +196,6 @@ def fit_biases(
     the caller to reproduce the numba random sequence exactly.
     """
     cdef int n_timepoints = X.shape[2]
-    cdef float[:, :, ::1] Xv = X
 
     cdef int num_kernels = _NUM_KERNELS
     cdef int num_dilations = dilations.shape[0]
@@ -243,7 +243,7 @@ def fit_biases(
 
                     # C_alpha = A = -X ; C_gamma = 0 ; C_gamma[4] = G = 3X
                     for t in range(n_timepoints):
-                        x = Xv[ex, c, t]
+                        x = <float>X[ex, c, t]
                         C_alpha[t] = -x
                         C_gamma[4 * n_timepoints + t] = x + x + x
                     for g in range(9):
@@ -256,9 +256,9 @@ def fit_biases(
                     for g in range(4):
                         if end > 0:
                             for t in range(end):
-                                C_alpha[n_timepoints - end + t] += -Xv[ex, c, t]
+                                C_alpha[n_timepoints - end + t] += -<float>X[ex, c, t]
                                 C_gamma[g * n_timepoints + n_timepoints - end + t] = (
-                                    3.0 * Xv[ex, c, t]
+                                    3.0 * <float>X[ex, c, t]
                                 )
                         end += dilation
 
@@ -266,9 +266,9 @@ def fit_biases(
                     for g in range(5, 9):
                         if start < n_timepoints:
                             for t in range(n_timepoints - start):
-                                C_alpha[t] += -Xv[ex, c, start + t]
+                                C_alpha[t] += -<float>X[ex, c, start + t]
                                 C_gamma[g * n_timepoints + t] = (
-                                    3.0 * Xv[ex, c, start + t]
+                                    3.0 * <float>X[ex, c, start + t]
                                 )
                         start += dilation
 

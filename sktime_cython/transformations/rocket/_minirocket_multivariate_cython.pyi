@@ -3,8 +3,10 @@
 import numpy as np
 from numpy.typing import NDArray
 
+_Real = NDArray[np.float32] | NDArray[np.float64]
+
 def transform(
-    X: NDArray[np.float32],
+    X: _Real,
     num_channels_per_combination: NDArray[np.int32],
     channel_indices: NDArray[np.int32],
     dilations: NDArray[np.int32],
@@ -12,7 +14,7 @@ def transform(
     biases: NDArray[np.float32],
 ) -> NDArray[np.float32]: ...
 def fit_biases(
-    X: NDArray[np.float32],
+    X: _Real,
     num_channels_per_combination: NDArray[np.int32],
     channel_indices: NDArray[np.int32],
     dilations: NDArray[np.int32],

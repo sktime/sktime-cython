@@ -1,4 +1,8 @@
-"""Numba-free MiniRocket multivariate transform (pure-numpy + Cython core).
+"""Numba-free MiniRocket transform (pure-numpy + Cython core).
+
+Handles univariate and multivariate panels with one code path: a univariate
+panel is the single-channel case, matching both ``MiniRocket`` and
+``MiniRocketMultivariate`` in sktime.
 
 Compute layer with no sktime dependency: numpy arrays in, numpy arrays out.
 ``fit`` returns a parameter tuple; ``transform`` applies it. An sktime
@@ -57,13 +61,28 @@ def _quantiles(n):
     )
 
 
+def _as_panel(X):
+    """Return X as contiguous 3D float32/float64; 2D is a univariate panel."""
+    X = np.asarray(X)
+    if X.ndim == 2:
+        X = X[:, None, :]
+    elif X.ndim != 3:
+        raise ValueError(f"X must be 2D or 3D, but found {X.ndim} dimensions")
+    if X.shape[0] == 0:
+        raise ValueError("X must contain at least one instance")
+    dtype = X.dtype if X.dtype in (np.float32, np.float64) else np.float64
+    return np.ascontiguousarray(X, dtype=dtype)
+
+
 def rocket_fit(X, num_kernels=10_000, max_dilations_per_kernel=32, random_state=None):
     """Fit dilations, channel selections, and biases.
 
     Parameters
     ----------
-    X : 3D np.ndarray, shape (n_instances, n_columns, n_timepoints)
-        panel of time series; cast to float32 internally.
+    X : np.ndarray, shape (n_instances, n_columns, n_timepoints)
+        or (n_instances, n_timepoints) for univariate series. float32 and
+        float64 are read without a copy, other dtypes are cast to float64;
+        computation is in float32, as in sktime.
     num_kernels : int, default=10000
         number of kernels; rounded down to a multiple of 84 (min 84).
     max_dilations_per_kernel : int, default=32
@@ -83,7 +102,7 @@ def rocket_fit(X, num_kernels=10_000, max_dilations_per_kernel=32, random_state=
         )
     seed = np.int32(random_state) if random_state is not None else None
 
-    X = np.ascontiguousarray(X, dtype=np.float32)
+    X = _as_panel(X)
     n_instances, n_columns, n_timepoints = X.shape
     if n_timepoints < 9:
         raise ValueError(
@@ -166,8 +185,10 @@ def rocket_transform(X, parameters, n_jobs=1):
 
     Parameters
     ----------
-    X : 3D np.ndarray, shape (n_instances, n_columns, n_timepoints)
-        panel of time series; cast to contiguous float32 internally.
+    X : np.ndarray, shape (n_instances, n_columns, n_timepoints)
+        or (n_instances, n_timepoints) for univariate series. float32 and
+        float64 are read without a copy, other dtypes are cast to float64;
+        computation is in float32, as in sktime.
     parameters : tuple
         the tuple returned by ``fit``.
     n_jobs : int, default=1
@@ -178,7 +199,7 @@ def rocket_transform(X, parameters, n_jobs=1):
     -------
     np.ndarray, shape (n_instances, n_features), float32
     """
-    X = np.ascontiguousarray(X, dtype=np.float32)
+    X = _as_panel(X)
     n_instances = X.shape[0]
 
     if n_jobs < 1 or n_jobs > multiprocessing.cpu_count():

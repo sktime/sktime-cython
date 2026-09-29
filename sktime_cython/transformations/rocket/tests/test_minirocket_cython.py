@@ -81,3 +81,66 @@ def test_too_short_series_raises():
     X = _panel(0, n_timepoints=8)
     with pytest.raises(ValueError, match="n_timepoints must be >= 9"):
         rocket_fit(X)
+
+
+@pytest.mark.skipif(not _HAS_SKTIME, reason="sktime not installed (dev extra)")
+@pytest.mark.parametrize(
+    "num_kernels,max_dilations_per_kernel,random_state",
+    [(84, 32, 42), (168, 16, 7), (84, 32, 0)],
+)
+def test_univariate_matches_numba(num_kernels, max_dilations_per_kernel, random_state):
+    """2D input must match sktime's univariate numba ``MiniRocket``."""
+    from sktime.transformations.rocket import MiniRocket
+
+    X = _panel(random_state, n_columns=1)
+    expected = MiniRocket(
+        num_kernels=num_kernels,
+        max_dilations_per_kernel=max_dilations_per_kernel,
+        random_state=random_state,
+    ).fit_transform(X)
+
+    X2d = X[:, 0, :]
+    params = rocket_fit(
+        X2d,
+        num_kernels=num_kernels,
+        max_dilations_per_kernel=max_dilations_per_kernel,
+        random_state=random_state,
+    )
+    np.testing.assert_allclose(
+        rocket_transform(X2d, params), expected.to_numpy(), rtol=1e-4, atol=1e-5
+    )
+
+
+def test_2d_equals_single_channel_3d():
+    """(n, d) input is exactly the (n, 1, d) single-channel case."""
+    X = _panel(5, n_columns=1)
+    params = rocket_fit(X[:, 0, :], num_kernels=168, random_state=2)
+    for a, b in zip(params, rocket_fit(X, num_kernels=168, random_state=2)):
+        np.testing.assert_array_equal(a, b)
+    np.testing.assert_array_equal(
+        rocket_transform(X[:, 0, :], params, n_jobs=3), rocket_transform(X, params)
+    )
+
+
+@pytest.mark.parametrize("shape", [(0, 20), (0, 1, 20), (20,), (1, 1, 1, 20)])
+def test_invalid_shape_raises(shape):
+    """Input must be a non-empty 2D or 3D panel."""
+    with pytest.raises(ValueError):
+        rocket_fit(np.zeros(shape, dtype=np.float32))
+
+
+@pytest.mark.parametrize("n_columns", [1, 3])
+def test_float64_matches_float32_cast(n_columns):
+    """float64 input is read without a copy but computed exactly as float32."""
+    X = _panel(6, n_columns=n_columns).astype(np.float64) * np.pi
+    X32 = X.astype(np.float32)
+    params = rocket_fit(X, num_kernels=168, random_state=4)
+    for a, b in zip(params, rocket_fit(X32, num_kernels=168, random_state=4)):
+        np.testing.assert_array_equal(a, b)
+    np.testing.assert_array_equal(
+        rocket_transform(X, params, n_jobs=2), rocket_transform(X32, params)
+    )
+    np.testing.assert_array_equal(
+        rocket_transform(X.astype(np.int64), params),
+        rocket_transform(X.astype(np.int64).astype(np.float32), params),
+    )
