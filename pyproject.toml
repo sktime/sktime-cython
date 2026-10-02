@@ -1,6 +1,6 @@
 [project]
 name = "sktime-cython"
-version = "0.1.0"
+version = "0.2.0"
 description = "Cython extensions for sktime"
 readme = "README.md"
 keywords = [
