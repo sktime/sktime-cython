@@ -12,16 +12,22 @@ if sys.platform == "win32":
 else:
     _fast = ["-O3", "-ffast-math"]
 
+# Fully qualified names, so extensions can live in any sktime_cython subpackage;
+# each source is the .pyx at the module's dotted path.
+_MODULES = [
+    "sktime_cython.transformations.rocket._minirocket_multivariate_cython",
+    "sktime_cython.transformations.rocket._multirocket_multivariate_cython",
+]
+
 extensions = [
     Extension(
-        "sktime_cython.transformations.rocket._minirocket_multivariate_cython",
-        sources=[
-            "sktime_cython/transformations/rocket/_minirocket_multivariate_cython.pyx"
-        ],
+        name,
+        sources=[name.replace(".", "/") + ".pyx"],
         include_dirs=[np.get_include()],
         define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
         extra_compile_args=_fast,
-    ),
+    )
+    for name in _MODULES
 ]
 
 setup(

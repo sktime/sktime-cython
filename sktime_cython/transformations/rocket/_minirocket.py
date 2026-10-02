@@ -15,50 +15,15 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 from sktime_cython.transformations.rocket import _minirocket_multivariate_cython as _cy
+from sktime_cython.transformations.rocket._common import (
+    _NUM_KERNELS,
+    _biases_from_C,
+    _check_dilations,
+    _fit_dilations,
+    _quantiles,
+)
 
 __all__ = ["rocket_fit", "rocket_transform"]
-
-_NUM_KERNELS = 84
-
-
-def _fit_dilations(n_timepoints, num_features, max_dilations_per_kernel):
-    """Dilation schedule (pure numpy, copied from sktime numba module)."""
-    num_kernels = _NUM_KERNELS
-    if num_features < num_kernels:
-        num_features = num_kernels
-
-    num_features_per_kernel = num_features // num_kernels
-    true_max_dilations_per_kernel = min(
-        num_features_per_kernel, max_dilations_per_kernel
-    )
-    multiplier = num_features_per_kernel / true_max_dilations_per_kernel
-
-    max_exponent = np.log2((n_timepoints - 1) / (9 - 1))
-    dilations, num_features_per_dilation = np.unique(
-        np.logspace(0, max_exponent, true_max_dilations_per_kernel, base=2).astype(
-            np.int32
-        ),
-        return_counts=True,
-    )
-    num_features_per_dilation = (num_features_per_dilation * multiplier).astype(
-        np.int32
-    )
-
-    remainder = num_features_per_kernel - np.sum(num_features_per_dilation)
-    i = 0
-    while remainder > 0:
-        num_features_per_dilation[i] += 1
-        remainder -= 1
-        i = (i + 1) % len(num_features_per_dilation)
-
-    return dilations, num_features_per_dilation
-
-
-def _quantiles(n):
-    """Evenly-spaced low-discrepancy quantile points (copied from sktime)."""
-    return np.array(
-        [(_ * ((np.sqrt(5) + 1) / 2)) % 1 for _ in range(1, n + 1)], dtype=np.float32
-    )
 
 
 def _as_panel(X):
@@ -157,19 +122,7 @@ def rocket_fit(X, num_kernels=10_000, max_dilations_per_kernel=32, random_state=
         instance_indices,
     )
 
-    biases = np.zeros(num_kernels_ * int(num_features_per_kernel), dtype=np.float32)
-    feature_index_start = 0
-    combination_index = 0
-    for dilation_index in range(num_dilations):
-        nfd = num_features_per_dilation[dilation_index]
-        for _kernel_index in range(num_kernels_):
-            feature_index_end = feature_index_start + nfd
-            biases[feature_index_start:feature_index_end] = np.quantile(
-                C[combination_index],
-                quantiles[feature_index_start:feature_index_end],
-            ).astype(np.float32)
-            feature_index_start = feature_index_end
-            combination_index += 1
+    biases = _biases_from_C(C, quantiles, num_features_per_dilation, num_kernels_)
 
     return (
         num_channels_per_combination,
@@ -200,6 +153,7 @@ def rocket_transform(X, parameters, n_jobs=1):
     np.ndarray, shape (n_instances, n_features), float32
     """
     X = _as_panel(X)
+    _check_dilations(parameters[2], X.shape[2], "dilations")
     n_instances = X.shape[0]
 
     if n_jobs < 1 or n_jobs > multiprocessing.cpu_count():
