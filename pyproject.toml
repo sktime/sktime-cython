@@ -1,6 +1,6 @@
 [project]
 name = "sktime-cython"
-version = "0.2.0"
+version = "0.3.0"
 description = "Cython extensions for sktime"
 readme = "README.md"
 keywords = [
@@ -12,12 +12,12 @@ keywords = [
 ]
 license = { file = "LICENSE" }
 maintainers = [
-  { name = "sktime developers", email = "sktime.toolbox@gmail.com" },
+  { name = "sktime developers", email = "info@sktime.net" },
 ]
 authors = [
-  { name = "sktime developers", email = "sktime.toolbox@gmail.com" },
+  { name = "sktime developers", email = "info@sktime.net" },
 ]
-requires-python = ">=3.10,<3.15"
+requires-python = ">=3.10,<3.16"
 classifiers = [
   "Intended Audience :: Developers",
   "Intended Audience :: Science/Research",
@@ -34,12 +34,13 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.15",
   "Topic :: Scientific/Engineering",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
   "Topic :: Software Development",
 ]
 dependencies = [
-  "numpy>=1.21,<2.5",
+  "numpy>=1.21,<2.6",
 ]
 
 [project.optional-dependencies]
